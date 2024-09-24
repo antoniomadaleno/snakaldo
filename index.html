@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo Snake</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #2c3e50;
+            font-family: 'Arial', sans-serif;
+        }
+        #gameArea {
+            display: flex;
+            align-items: flex-start;
+        }
+        #controlPanel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-right: 20px;
+            color: white;
+        }
+        #scoreBoard {
+            font-size: 24px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 20px;
+            width: 150px;
+            text-align: center;
+        }
+        #pauseStartBtn {
+            font-size: 18px;
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        #pauseStartBtn:hover {
+            background-color: #2980b9;
+        }
+        #rankingBoard {
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            text-align: left;
+        }
+        #topScores {
+            list-style-type: none;
+            padding: 0;
+        }
+        #topScores li {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        #topScores .rank {
+            width: 30px;
+            text-align: right;
+            margin-right: 5px;
+        }
+        #topScores .points {
+            flex-grow: 1;
+        }
+        #gameContainer {
+            position: relative;
+            width: 95vmin;
+            height: 95vmin;
+            border: 10px solid #34495e;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            background-color: #1a2a3a;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameArea">
+        <div id="controlPanel">
+            <div id="scoreBoard">Pontuação:<br><span id="score">0</span></div>
+            <button id="pauseStartBtn">Iniciar</button>
+            <div id="rankingBoard">
+                <h3>Top 3 Pontuações</h3>
+                <ol id="topScores"></ol>
+            </div>
+        </div>
+        <div id="gameContainer">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const pauseStartBtn = document.getElementById('pauseStartBtn');
+        const topScoresElement = document.getElementById('topScores');
+
+        let gridSize;
+        let tileCount;
+        let snake = [{x: 10, y: 10}];
+        let food = {x: 15, y: 15, type: 0};
+        let dx = 0;
+        let dy = 0;
+        let score = 0;
+        let gameLoopId;
+        let isGameRunning = false;
+        let lastTime = 0;
+        const gameSpeed = 100;
+
+        const snakeHead = new Image();
+        snakeHead.src = 'ronaldo.jpg';
+
+        const snakeBody = new Image();
+        snakeBody.src = 'ronaldo2.jpg';
+
+        const foodImages = [
+            { img: new Image(), src: 'messi.jpg' },
+            { img: new Image(), src: 'champions.jpg' },
+            { img: new Image(), src: 'atletico.jpg' },
+            { img: new Image(), src: 'georgina.jpg' },
+            { img: new Image(), src: 'bola_ouro.jpg' },
+            { img: new Image(), src: 'ten_hag.jpg' }
+        ];
+
+        foodImages.forEach(foodImg => {
+            foodImg.img.src = foodImg.src;
+        });
+
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            gridSize = Math.floor(Math.min(canvas.width, canvas.height) / 20);
+            tileCount = 20;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        function togglePauseStart() {
+            if (isGameRunning) {
+                pauseGame();
+            } else {
+                startGame();
+            }
+        }
+
+        function startGame() {
+            if (!isGameRunning) {
+                isGameRunning = true;
+                pauseStartBtn.textContent = 'Pausar';
+                lastTime = performance.now();
+                gameLoop();
+            }
+        }
+
+        function pauseGame() {
+            if (isGameRunning) {
+                isGameRunning = false;
+                pauseStartBtn.textContent = 'Iniciar';
+                cancelAnimationFrame(gameLoopId);
+            }
+        }
+
+        function gameLoop(currentTime) {
+            if (!isGameRunning) return;
+
+            gameLoopId = requestAnimationFrame(gameLoop);
+
+            const deltaTime = currentTime - lastTime;
+            if (deltaTime < gameSpeed) return;
+
+            lastTime = currentTime;
+
+            moveSnake();
+            if (checkCollision()) {
+                endGame();
+                return;
+            }
+            clearCanvas();
+            drawSnake();
+            drawFood();
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = '#1a2a3a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawSnake() {
+            for (let i = 1; i < snake.length; i++) {
+                drawSegment(snake[i].x, snake[i].y);
+            }
+            drawHead(snake[0].x, snake[0].y);
+        }
+
+        function drawSegment(x, y) {
+            ctx.drawImage(snakeBody, x * gridSize, y * gridSize, gridSize, gridSize);
+        }
+
+        function drawHead(x, y) {
+            ctx.drawImage(snakeHead, x * gridSize, y * gridSize, gridSize, gridSize);
+        }
+
+        function drawFood() {
+            const foodImg = foodImages[food.type].img;
+            ctx.drawImage(foodImg, food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+        }
+
+        function moveSnake() {
+            const head = {
+                x: (snake[0].x + dx + tileCount) % tileCount,
+                y: (snake[0].y + dy + tileCount) % tileCount
+            };
+
+            snake.unshift(head);
+
+            if (head.x === food.x && head.y === food.y) {
+                score++;
+                scoreElement.textContent = score;
+                generateFood();
+            } else {
+                snake.pop();
+            }
+        }
+
+        function generateFood() {
+            do {
+                food.x = Math.floor(Math.random() * tileCount);
+                food.y = Math.floor(Math.random() * tileCount);
+            } while (snake.some(segment => segment.x === food.x && segment.y === food.y));
+            
+            food.type = Math.floor(Math.random() * foodImages.length);
+            console.log(`Nova comida gerada: tipo ${food.type}`);
+        }
+
+        function checkCollision() {
+            const head = snake[0];
+            return snake.slice(1).some(segment => segment.x === head.x && segment.y === head.y);
+        }
+
+        function endGame() {
+            alert(`Game Over! Sua pontuação: ${score}`);
+            saveScore(score);
+            updateTopScores();
+            resetGame();
+        }
+
+        function resetGame() {
+            snake = [{x: Math.floor(tileCount/2), y: Math.floor(tileCount/2)}];
+            generateFood();
+            dx = 0;
+            dy = 0;
+            score = 0;
+            scoreElement.textContent = score;
+            pauseGame();
+        }
+
+        function changeDirection(event) {
+            const LEFT_KEY = 37;
+            const RIGHT_KEY = 39;
+            const UP_KEY = 38;
+            const DOWN_KEY = 40;
+
+            const keyPressed = event.keyCode;
+            const goingUp = dy === -1;
+            const goingDown = dy === 1;
+            const goingRight = dx === 1;
+            const goingLeft = dx === -1;
+
+            if (keyPressed === LEFT_KEY && !goingRight) {
+                dx = -1;
+                dy = 0;
+            }
+
+            if (keyPressed === UP_KEY && !goingDown) {
+                dx = 0;
+                dy = -1;
+            }
+
+            if (keyPressed === RIGHT_KEY && !goingLeft) {
+                dx = 1;
+                dy = 0;
+            }
+
+            if (keyPressed === DOWN_KEY && !goingUp) {
+                dx = 0;
+                dy = 1;
+            }
+        }
+
+        function saveScore(score) {
+            let scores = localStorage.getItem('snakeScores');
+            scores = scores ? JSON.parse(scores) : [];
+            scores.push(score);
+            scores.sort((a, b) => b - a);
+            localStorage.setItem('snakeScores', JSON.stringify(scores));
+        }
+
+        function updateTopScores() {
+            let scores = localStorage.getItem('snakeScores');
+            scores = scores ? JSON.parse(scores) : [];
+            const topScores = scores.slice(0, 3);
+            topScoresElement.innerHTML = topScores.map((score, index) => 
+                `<li><span class="rank">${index + 1}º</span> - <span class="points">${score} pontos</span></li>`
+            ).join('');
+        }
+
+        pauseStartBtn.addEventListener('click', togglePauseStart);
+        document.addEventListener('keydown', changeDirection);
+
+        Promise.all([
+            new Promise(resolve => snakeHead.onload = resolve),
+            new Promise(resolve => snakeBody.onload = resolve),
+            ...foodImages.map(foodImg => new Promise(resolve => foodImg.img.onload = resolve))
+        ]).then(() => {
+            resizeCanvas();
+            resetGame();
+            clearCanvas();
+            drawSnake();
+            drawFood();
+            updateTopScores();
+        });
+    </script>
+</body>
+</html>
